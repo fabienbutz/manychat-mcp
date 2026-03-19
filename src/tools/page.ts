@@ -1,0 +1,119 @@
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import { getClient, cleanData } from "../client.js";
+import {
+  formatPageInfo, formatTags, formatCustomFields,
+  formatBotFields, formatFlows, formatGrowthTools, formatOtnTopics,
+} from "../formatters.js";
+
+export function registerPageTools(server: McpServer) {
+  // --- Page Info ---
+  server.tool("page_get_info", "Get ManyChat page/bot information.", {}, async () => {
+    const result = await getClient().get("/page/getInfo");
+    return { content: [{ type: "text", text: formatPageInfo(result.data) }] };
+  });
+
+  // --- Tags ---
+  server.tool("tag_list", "List all tags in ManyChat.", {}, async () => {
+    const result = await getClient().get("/page/getTags");
+    return { content: [{ type: "text", text: formatTags(result.data as unknown as any[]) }] };
+  });
+
+  server.tool("tag_create", "Create a new tag in ManyChat.", {
+    name: z.string().describe("Tag name (required)"),
+  }, async (params) => {
+    const result = await getClient().post("/page/createTag", { name: params.name });
+    return { content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }] };
+  });
+
+  server.tool("tag_delete", "Delete a tag from ManyChat (by ID or name).", {
+    tag_id: z.number().optional().describe("Tag ID"),
+    tag_name: z.string().optional().describe("Tag name (alternative to tag_id)"),
+  }, async (params) => {
+    const client = getClient();
+    if (params.tag_id) {
+      await client.post("/page/removeTag", { tag_id: params.tag_id });
+    } else if (params.tag_name) {
+      await client.post("/page/removeTagByName", { tag_name: params.tag_name });
+    } else {
+      throw new Error("Either tag_id or tag_name is required");
+    }
+    return { content: [{ type: "text", text: "Tag gelöscht." }] };
+  });
+
+  // --- Custom Fields ---
+  server.tool("custom_field_list", "List all custom fields in ManyChat.", {}, async () => {
+    const result = await getClient().get("/page/getCustomFields");
+    return { content: [{ type: "text", text: formatCustomFields(result.data as unknown as any[]) }] };
+  });
+
+  server.tool("custom_field_create", "Create a new custom field in ManyChat.", {
+    caption: z.string().describe("Field display name (required)"),
+    type: z.enum(["text", "number", "date", "datetime", "boolean"]).describe("Field type (required)"),
+    description: z.string().optional().describe("Field description"),
+  }, async (params) => {
+    const result = await getClient().post("/page/createCustomField", cleanData({
+      caption: params.caption, type: params.type, description: params.description,
+    }));
+    return { content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }] };
+  });
+
+  // --- Bot Fields ---
+  server.tool("bot_field_list", "List all bot fields in ManyChat.", {}, async () => {
+    const result = await getClient().get("/page/getBotFields");
+    return { content: [{ type: "text", text: formatBotFields(result.data as unknown as any[]) }] };
+  });
+
+  server.tool("bot_field_create", "Create a new bot field in ManyChat.", {
+    name: z.string().describe("Field name (required)"),
+    type: z.enum(["text", "number", "date", "datetime", "boolean"]).describe("Field type (required)"),
+    description: z.string().optional().describe("Field description"),
+    value: z.string().optional().describe("Initial value"),
+  }, async (params) => {
+    const result = await getClient().post("/page/createBotField", cleanData({
+      name: params.name, type: params.type, description: params.description, value: params.value,
+    }));
+    return { content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }] };
+  });
+
+  server.tool("bot_field_set", "Set bot field value(s) in ManyChat. Can set one by ID, one by name, or multiple at once.", {
+    field_id: z.number().optional().describe("Bot field ID (for single field)"),
+    field_name: z.string().optional().describe("Bot field name (alternative to field_id)"),
+    field_value: z.string().optional().describe("Value to set (for single field)"),
+    fields: z.array(z.object({
+      field_id: z.number().optional().describe("Field ID"),
+      field_name: z.string().optional().describe("Field name (alternative to field_id)"),
+      field_value: z.string().describe("Value to set"),
+    })).optional().describe("Multiple fields to set (max 20)"),
+  }, async (params) => {
+    const client = getClient();
+    if (params.fields?.length) {
+      await client.post("/page/setBotFields", { fields: params.fields });
+    } else if (params.field_id && params.field_value !== undefined) {
+      await client.post("/page/setBotField", { field_id: params.field_id, field_value: params.field_value });
+    } else if (params.field_name && params.field_value !== undefined) {
+      await client.post("/page/setBotFieldByName", { field_name: params.field_name, field_value: params.field_value });
+    } else {
+      throw new Error("Provide field_id+field_value, field_name+field_value, or fields array");
+    }
+    return { content: [{ type: "text", text: "Bot Field(s) gesetzt." }] };
+  });
+
+  // --- Flows ---
+  server.tool("flow_list", "List all flows/automations in ManyChat with their folders.", {}, async () => {
+    const result = await getClient().get("/page/getFlows");
+    return { content: [{ type: "text", text: formatFlows(result.data) }] };
+  });
+
+  // --- Growth Tools ---
+  server.tool("growth_tool_list", "List all growth tools/widgets in ManyChat.", {}, async () => {
+    const result = await getClient().get("/page/getGrowthTools");
+    return { content: [{ type: "text", text: formatGrowthTools(result.data as unknown as any[]) }] };
+  });
+
+  // --- OTN Topics ---
+  server.tool("otn_topic_list", "List all One-Time Notification topics in ManyChat.", {}, async () => {
+    const result = await getClient().get("/page/getOtnTopics");
+    return { content: [{ type: "text", text: formatOtnTopics(result.data as unknown as any[]) }] };
+  });
+}
