@@ -26,6 +26,7 @@ npx -y github:fabienbutz/manychat-mcp    # Direct GitHub installation
 - **Entry Point**: `src/index.ts` — stdio transport, registers all tool groups
 - **API Client**: `src/client.ts` — `ManyChatClient` wraps `https://api.manychat.com/fb` (Bearer auth). Lazy singleton via `getClient()`; errors normalized in `handleResponse()` (HTTP errors + API-level `status === "error"`)
 - **Formatters**: `src/formatters.ts` — human-readable text output (raw JSON available via `detailed: true` on read tools)
+- **Resolvers**: `src/resolvers.ts` — case-insensitive name→ID lookup for tags / custom fields / bot fields with 60s TTL cache. Invalidated on create/delete. All `*ByName` tool shapes go through these resolvers instead of the ManyChat `*ByName` endpoints, so the model never guesses casings and errors surface the full available list.
 - **Tools**: Modular groups in `src/tools/` — 28 tools total:
   - `page.ts` (13) — page info, tags, custom fields, bot fields, flows, growth tools, OTN topics
   - `subscriber.ts` (9) — get/find/create/update, add/remove tag, set custom field, verify signed request
@@ -37,6 +38,7 @@ npx -y github:fabienbutz/manychat-mcp    # Direct GitHub installation
 2. Call `server.tool(name, description, zodShape, handler)`. Use `getClient().get(...)`/`.post(...)`.
 3. For POST bodies with optional params, pass through `cleanData()` to drop `undefined`/`null`.
 4. For read tools returning records: support a `detailed: z.boolean().optional()` flag and branch between `JSON.stringify(...)` and a formatter in `src/formatters.ts`.
+5. For tools that accept a human-provided name (tag, custom field, bot field): do NOT call the ManyChat `*ByName` endpoint directly. Resolve the name via `src/resolvers.ts` and call the `*ById` endpoint — this gives case-insensitive matching, ambiguity detection, and a full "available list" on miss. Call `invalidateResolverCache(endpoint)` after any create/delete that changes the underlying list.
 
 ### Key Patterns
 - **Zod Validation**: All tool parameters use strict Zod schemas with `.describe()` per field
