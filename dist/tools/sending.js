@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { getClient, cleanData } from "../client.js";
+const ChannelSchema = z.enum(["facebook", "instagram", "whatsapp", "telegram"]).optional()
+    .describe("Target channel. Default 'facebook' (Messenger). Set 'telegram'/'whatsapp'/'instagram' when the subscriber lives on that channel — gets forwarded as content.type in the payload.");
+function channelType(channel) {
+    return channel && channel !== "facebook" ? channel : undefined;
+}
 const ButtonSchema = z.object({
     type: z.enum(["url", "call", "flow", "buy", "dynamic_block_callback"]).describe("Button type"),
     caption: z.string().describe("Button text"),
@@ -29,13 +34,14 @@ const QuickReplySchema = z.object({
     method: z.enum(["get", "post"]).optional().describe("HTTP method (for dynamic_block_callback)"),
 });
 export function registerSendingTools(server) {
-    server.tool("send_content", "Send dynamic content (text, images, videos, cards, buttons) to a ManyChat subscriber. Supports up to 10 messages, 5 actions, and 11 quick replies per request.", {
+    server.tool("send_content", "Send dynamic content (text, images, videos, cards, buttons) to a ManyChat subscriber across any connected channel (Messenger, Instagram, WhatsApp, Telegram). Up to 10 messages, 5 actions, 11 quick replies per request.", {
         subscriber_id: z.string().describe("Subscriber ID (required)"),
         messages: z.array(MessageSchema).min(1).max(10).describe("Messages to send (1-10)"),
         actions: z.array(ActionSchema).optional().describe("Actions to perform (max 5)"),
         quick_replies: z.array(QuickReplySchema).optional().describe("Quick replies (max 11)"),
         message_tag: z.string().optional().describe("Message tag (required if >24h since last interaction)"),
         otn_topic_name: z.string().optional().describe("OTN topic name (for one-time notifications)"),
+        channel: ChannelSchema,
     }, async (params) => {
         const content = {
             messages: params.messages.map((m) => cleanData({
@@ -56,6 +62,9 @@ export function registerSendingTools(server) {
                 type: q.type, caption: q.caption, target: q.target, url: q.url, method: q.method,
             }));
         }
+        const ct = channelType(params.channel);
+        if (ct)
+            content.type = ct;
         const data = {
             subscriber_id: params.subscriber_id,
             data: { version: "v2", content },
@@ -65,24 +74,26 @@ export function registerSendingTools(server) {
         if (params.otn_topic_name)
             data.otn_topic_name = params.otn_topic_name;
         const result = await getClient().post("/fb/sending/sendContent", data);
-        return { content: [{ type: "text", text: `Nachricht gesendet. Status: ${result.status}` }] };
+        return { content: [{ type: "text", text: `Nachricht gesendet (${params.channel ?? "facebook"}). Status: ${result.status}` }] };
     });
-    server.tool("send_text", "Send a simple text message to a ManyChat subscriber. Shortcut for send_content with a single text message.", {
+    server.tool("send_text", "Send a simple text message to a ManyChat subscriber on any connected channel (Messenger, Instagram, WhatsApp, Telegram). Shortcut for send_content with a single text message.", {
         subscriber_id: z.string().describe("Subscriber ID (required)"),
         text: z.string().describe("Text message to send (required)"),
         message_tag: z.string().optional().describe("Message tag (required if >24h since last interaction)"),
+        channel: ChannelSchema,
     }, async (params) => {
+        const content = { messages: [{ type: "text", text: params.text }] };
+        const ct = channelType(params.channel);
+        if (ct)
+            content.type = ct;
         const data = {
             subscriber_id: params.subscriber_id,
-            data: {
-                version: "v2",
-                content: { messages: [{ type: "text", text: params.text }] },
-            },
+            data: { version: "v2", content },
         };
         if (params.message_tag)
             data.message_tag = params.message_tag;
         const result = await getClient().post("/fb/sending/sendContent", data);
-        return { content: [{ type: "text", text: `Nachricht gesendet. Status: ${result.status}` }] };
+        return { content: [{ type: "text", text: `Nachricht gesendet (${params.channel ?? "facebook"}). Status: ${result.status}` }] };
     });
     server.tool("send_content_by_user_ref", "Send dynamic content to a Messenger user_ref (checkbox plugin / customer chat). Note: ManyChat does NOT process `actions` for this endpoint.", {
         user_ref: z.string().describe("Messenger user_ref (required)"),
@@ -112,6 +123,23 @@ export function registerSendingTools(server) {
             data.message_tag = params.message_tag;
         const result = await getClient().post("/fb/sending/sendContentByUserRef", data);
         return { content: [{ type: "text", text: `Nachricht an user_ref gesendet. Status: ${result.status}` }] };
+    });
+    server.tool("send_raw", "Escape hatch: send a fully custom sendContent payload to any channel. Use this when the typed send_content/send_text tools don't cover a feature (e.g. channel-specific message types, templates, newer ManyChat payload fields). You supply the exact `data.content` object; we wrap it with subscriber_id + version v2 and POST to /fb/sending/sendContent.", {
+        subscriber_id: z.string().describe("Subscriber ID (required)"),
+        content: z.record(z.any()).describe("Raw content object, e.g. { type: 'telegram', messages: [...], actions: [...], quick_replies: [...] }. Set `type` for non-Messenger channels."),
+        message_tag: z.string().optional().describe("Message tag (required if >24h since last interaction)"),
+        otn_topic_name: z.string().optional().describe("OTN topic name (for one-time notifications)"),
+    }, async (params) => {
+        const data = {
+            subscriber_id: params.subscriber_id,
+            data: { version: "v2", content: params.content },
+        };
+        if (params.message_tag)
+            data.message_tag = params.message_tag;
+        if (params.otn_topic_name)
+            data.otn_topic_name = params.otn_topic_name;
+        const result = await getClient().post("/fb/sending/sendContent", data);
+        return { content: [{ type: "text", text: `Raw payload gesendet. Status: ${result.status}` }] };
     });
     server.tool("send_flow", "Trigger a flow/automation for a ManyChat subscriber.", {
         subscriber_id: z.string().describe("Subscriber ID (required)"),

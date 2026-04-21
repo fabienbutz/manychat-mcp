@@ -26,10 +26,11 @@ npx -y github:fabienbutz/manychat-mcp    # Direct GitHub installation
 - **Entry Point**: `src/index.ts` — stdio transport, registers all tool groups
 - **API Client**: `src/client.ts` — `ManyChatClient` wraps `https://api.manychat.com/fb` (Bearer auth). Lazy singleton via `getClient()`; errors normalized in `handleResponse()` (HTTP errors + API-level `status === "error"`)
 - **Formatters**: `src/formatters.ts` — human-readable text output (raw JSON available via `detailed: true` on read tools)
-- **Tools**: Modular groups in `src/tools/` — totaling ~22 tools:
-  - `page.ts` (12) — page info, tags, custom fields, bot fields, flows, growth tools, OTN topics
-  - `subscriber.ts` (7) — get/find/create/update, add/remove tag, set custom field
-  - `sending.ts` (3) — `send_content` (dynamic blocks), `send_text`, `send_flow`
+- **Tools**: Modular groups in `src/tools/` — 28 tools total:
+  - `page.ts` (13) — page info, tags, custom fields, bot fields, flows, growth tools, OTN topics
+  - `subscriber.ts` (9) — get/find/create/update, add/remove tag, set custom field, verify signed request
+  - `sending.ts` (5) — `send_content`, `send_text`, `send_content_by_user_ref`, `send_flow`, `send_raw` (escape hatch). All accept `channel: facebook|instagram|whatsapp|telegram`.
+  - `template.ts` (1) — single-use template link
 
 ### Adding a new tool
 1. Pick the right file in `src/tools/` (or create a new group and register it in `index.ts`).
@@ -67,4 +68,5 @@ Configure in `claude_desktop_config.json`:
 - **API Rate Limits**: ManyChat enforces strict rate limits — batch operations when possible
 - **Environment Required**: All tools fail without `MANYCHAT_API_KEY` (read lazily on first tool call, not at startup)
 - **Subscriber identification**: `subscriber_find` supports name / email / phone / custom-field; most other subscriber ops require `subscriber_id`
-- **FB endpoint only**: Client is hardcoded to `/fb` (Messenger). Instagram/WhatsApp/Telegram endpoints would need client changes
+- **API namespace `/fb/` covers all channels**: Despite the name, `/fb/` is the single public ManyChat API namespace — it handles Messenger, Instagram, WhatsApp, and Telegram. Channel selection happens in the payload via `data.content.type: "instagram" | "whatsapp" | "telegram"` (omit for Messenger). Sending tools expose this as a `channel` parameter.
+- **TikTok not supported**: ManyChat has no TikTok chat/messaging API (only inbound TikTok Lead Ads integration via Ads Manager). No way to send messages to TikTok users through this MCP.
