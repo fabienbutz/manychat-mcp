@@ -7,9 +7,29 @@ export function registerSubscriberTools(server) {
         subscriber_id: z.string().describe("ManyChat subscriber ID (required)"),
         detailed: z.boolean().optional().describe("Return full raw JSON (default false)"),
     }, async (params) => {
-        const result = await getClient().get("/subscriber/getInfo", { subscriber_id: params.subscriber_id });
+        const result = await getClient().get("/fb/subscriber/getInfo", { subscriber_id: params.subscriber_id });
         const text = params.detailed ? JSON.stringify(result.data, null, 2) : formatSubscriber(result.data);
         return { content: [{ type: "text", text }] };
+    });
+    // --- Get by user_ref ---
+    server.tool("subscriber_get_by_user_ref", "Get subscriber info by Messenger user_ref (used for webview/checkbox plugins).", {
+        user_ref: z.string().describe("Messenger user_ref identifier (required)"),
+        detailed: z.boolean().optional().describe("Return full raw JSON (default false)"),
+    }, async (params) => {
+        const result = await getClient().get("/fb/subscriber/getInfoByUserRef", { user_ref: params.user_ref });
+        const text = params.detailed ? JSON.stringify(result.data, null, 2) : formatSubscriber(result.data);
+        return { content: [{ type: "text", text }] };
+    });
+    // --- Verify signed request (Messenger webview) ---
+    server.tool("subscriber_verify_signed_request", "Verify a Messenger webview signed_request and bind it to a subscriber. See https://developers.facebook.com/docs/messenger-platform/webview/", {
+        subscriber_id: z.string().describe("Subscriber ID (required)"),
+        signed_request: z.string().describe("signed_request string from the Messenger webview (required)"),
+    }, async (params) => {
+        const result = await getClient().post("/fb/subscriber/verifyBySignedRequest", {
+            subscriber_id: Number(params.subscriber_id),
+            signed_request: params.signed_request,
+        });
+        return { content: [{ type: "text", text: `Verifizierung: ${result.status}` }] };
     });
     // --- Find ---
     server.tool("subscriber_find", "Find subscribers in ManyChat by name, email, phone, or custom field. Max 100 results.", {
@@ -28,19 +48,19 @@ export function registerSubscriberTools(server) {
                 queryParams.email = params.email;
             if (params.phone)
                 queryParams.phone = params.phone;
-            result = await client.get("/subscriber/findBySystemField", queryParams);
+            result = await client.get("/fb/subscriber/findBySystemField", queryParams);
             // Returns single subscriber, wrap in array for consistent formatting
             const data = result.data;
             const text = params.detailed ? JSON.stringify(data, null, 2) : formatSubscriber(data);
             return { content: [{ type: "text", text }] };
         }
         else if (params.field_id && params.field_value) {
-            result = await client.get("/subscriber/findByCustomField", {
+            result = await client.get("/fb/subscriber/findByCustomField", {
                 field_id: String(params.field_id), field_value: params.field_value,
             });
         }
         else if (params.name) {
-            result = await client.get("/subscriber/findByName", { name: params.name });
+            result = await client.get("/fb/subscriber/findByName", { name: params.name });
         }
         else {
             throw new Error("Provide name, email, phone, or field_id+field_value");
@@ -61,7 +81,7 @@ export function registerSubscriberTools(server) {
         has_opt_in_email: z.boolean().optional().describe("Email opt-in (required if email is set)"),
         consent_phrase: z.string().optional().describe("Consent phrase (required for opt-in)"),
     }, async (params) => {
-        const result = await getClient().post("/subscriber/createSubscriber", cleanData({
+        const result = await getClient().post("/fb/subscriber/createSubscriber", cleanData({
             first_name: params.first_name, last_name: params.last_name,
             phone: params.phone, whatsapp_phone: params.whatsapp_phone, email: params.email,
             gender: params.gender, has_opt_in_sms: params.has_opt_in_sms,
@@ -82,7 +102,7 @@ export function registerSubscriberTools(server) {
         has_opt_in_email: z.boolean().optional().describe("Email opt-in"),
         consent_phrase: z.string().optional().describe("Consent phrase"),
     }, async (params) => {
-        const result = await getClient().post("/subscriber/updateSubscriber", cleanData({
+        const result = await getClient().post("/fb/subscriber/updateSubscriber", cleanData({
             subscriber_id: params.subscriber_id,
             first_name: params.first_name, last_name: params.last_name,
             phone: params.phone, email: params.email, gender: params.gender,
@@ -100,10 +120,10 @@ export function registerSubscriberTools(server) {
     }, async (params) => {
         const client = getClient();
         if (params.tag_id) {
-            await client.post("/subscriber/addTag", { subscriber_id: params.subscriber_id, tag_id: params.tag_id });
+            await client.post("/fb/subscriber/addTag", { subscriber_id: params.subscriber_id, tag_id: params.tag_id });
         }
         else if (params.tag_name) {
-            await client.post("/subscriber/addTagByName", { subscriber_id: params.subscriber_id, tag_name: params.tag_name });
+            await client.post("/fb/subscriber/addTagByName", { subscriber_id: params.subscriber_id, tag_name: params.tag_name });
         }
         else {
             throw new Error("Either tag_id or tag_name is required");
@@ -117,10 +137,10 @@ export function registerSubscriberTools(server) {
     }, async (params) => {
         const client = getClient();
         if (params.tag_id) {
-            await client.post("/subscriber/removeTag", { subscriber_id: params.subscriber_id, tag_id: params.tag_id });
+            await client.post("/fb/subscriber/removeTag", { subscriber_id: params.subscriber_id, tag_id: params.tag_id });
         }
         else if (params.tag_name) {
-            await client.post("/subscriber/removeTagByName", { subscriber_id: params.subscriber_id, tag_name: params.tag_name });
+            await client.post("/fb/subscriber/removeTagByName", { subscriber_id: params.subscriber_id, tag_name: params.tag_name });
         }
         else {
             throw new Error("Either tag_id or tag_name is required");
@@ -141,17 +161,17 @@ export function registerSubscriberTools(server) {
     }, async (params) => {
         const client = getClient();
         if (params.fields?.length) {
-            await client.post("/subscriber/setCustomFields", {
+            await client.post("/fb/subscriber/setCustomFields", {
                 subscriber_id: params.subscriber_id, fields: params.fields,
             });
         }
         else if (params.field_id && params.field_value !== undefined) {
-            await client.post("/subscriber/setCustomField", {
+            await client.post("/fb/subscriber/setCustomField", {
                 subscriber_id: params.subscriber_id, field_id: params.field_id, field_value: params.field_value,
             });
         }
         else if (params.field_name && params.field_value !== undefined) {
-            await client.post("/subscriber/setCustomFieldByName", {
+            await client.post("/fb/subscriber/setCustomFieldByName", {
                 subscriber_id: params.subscriber_id, field_name: params.field_name, field_value: params.field_value,
             });
         }

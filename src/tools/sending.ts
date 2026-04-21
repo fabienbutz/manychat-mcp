@@ -74,7 +74,7 @@ export function registerSendingTools(server: McpServer) {
       if (params.message_tag) data.message_tag = params.message_tag;
       if (params.otn_topic_name) data.otn_topic_name = params.otn_topic_name;
 
-      const result = await getClient().post("/sending/sendContent", data);
+      const result = await getClient().post("/fb/sending/sendContent", data);
       return { content: [{ type: "text", text: `Nachricht gesendet. Status: ${result.status}` }] };
     }
   );
@@ -97,8 +97,44 @@ export function registerSendingTools(server: McpServer) {
       };
       if (params.message_tag) data.message_tag = params.message_tag;
 
-      const result = await getClient().post("/sending/sendContent", data);
+      const result = await getClient().post("/fb/sending/sendContent", data);
       return { content: [{ type: "text", text: `Nachricht gesendet. Status: ${result.status}` }] };
+    }
+  );
+
+  server.tool(
+    "send_content_by_user_ref",
+    "Send dynamic content to a Messenger user_ref (checkbox plugin / customer chat). Note: ManyChat does NOT process `actions` for this endpoint.",
+    {
+      user_ref: z.string().describe("Messenger user_ref (required)"),
+      messages: z.array(MessageSchema).min(1).max(10).describe("Messages to send (1-10)"),
+      quick_replies: z.array(QuickReplySchema).optional().describe("Quick replies (max 11)"),
+      message_tag: z.string().optional().describe("Message tag (required if >24h since last interaction)"),
+    },
+    async (params) => {
+      const content: Record<string, unknown> = {
+        messages: params.messages.map((m) => cleanData({
+          type: m.type, text: m.text, url: m.url,
+          buttons: m.buttons?.map((b) => cleanData({
+            type: b.type, caption: b.caption, url: b.url, phone: b.phone,
+            target: b.target, webview_size: b.webview_size, method: b.method,
+          })),
+        })),
+      };
+      if (params.quick_replies?.length) {
+        content.quick_replies = params.quick_replies.map((q) => cleanData({
+          type: q.type, caption: q.caption, target: q.target, url: q.url, method: q.method,
+        }));
+      }
+
+      const data: Record<string, unknown> = {
+        user_ref: Number(params.user_ref),
+        data: { version: "v2", content },
+      };
+      if (params.message_tag) data.message_tag = params.message_tag;
+
+      const result = await getClient().post("/fb/sending/sendContentByUserRef", data);
+      return { content: [{ type: "text", text: `Nachricht an user_ref gesendet. Status: ${result.status}` }] };
     }
   );
 
@@ -106,7 +142,7 @@ export function registerSendingTools(server: McpServer) {
     subscriber_id: z.string().describe("Subscriber ID (required)"),
     flow_ns: z.string().describe("Flow namespace/ID (required, visible in flow URL)"),
   }, async (params) => {
-    const result = await getClient().post("/sending/sendFlow", {
+    const result = await getClient().post("/fb/sending/sendFlow", {
       subscriber_id: params.subscriber_id, flow_ns: params.flow_ns,
     });
     return { content: [{ type: "text", text: `Flow gestartet. Status: ${result.status}` }] };

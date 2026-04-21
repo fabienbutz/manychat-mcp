@@ -49,6 +49,11 @@ export function formatGrowthTools(tools) {
         return "Keine Growth Tools vorhanden.";
     return `${tools.length} Growth Tools:\n` + tools.map((t) => `  • ${t.name} [${t.type}] (ID: ${t.id})`).join("\n");
 }
+export function formatWidgets(widgets) {
+    if (!widgets?.length)
+        return "Keine Widgets vorhanden.";
+    return `${widgets.length} Widgets:\n` + widgets.map((w) => `  • ${w.name || w.caption || "–"}${w.type ? ` [${w.type}]` : ""} (ID: ${w.id})`).join("\n");
+}
 export function formatOtnTopics(topics) {
     if (!topics?.length)
         return "Keine OTN Topics vorhanden.";

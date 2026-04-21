@@ -56,6 +56,13 @@ export function formatGrowthTools(tools: any[]): string {
   ).join("\n");
 }
 
+export function formatWidgets(widgets: any[]): string {
+  if (!widgets?.length) return "Keine Widgets vorhanden.";
+  return `${widgets.length} Widgets:\n` + widgets.map((w) =>
+    `  • ${w.name || w.caption || "–"}${w.type ? ` [${w.type}]` : ""} (ID: ${w.id})`
+  ).join("\n");
+}
+
 export function formatOtnTopics(topics: any[]): string {
   if (!topics?.length) return "Keine OTN Topics vorhanden.";
   return `${topics.length} OTN Topics:\n` + topics.map((t) =>

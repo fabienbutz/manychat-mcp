@@ -1,10 +1,12 @@
 /**
  * ManyChat API client
- * Base URL: https://api.manychat.com/fb/
+ * Base URL: https://api.manychat.com
  * Auth: Bearer token
+ *
+ * Paths must include the namespace prefix (e.g. "/fb/page/getInfo", "/user/template/...").
  */
 
-const BASE_URL = "https://api.manychat.com/fb";
+const BASE_URL = "https://api.manychat.com";
 
 export class ManyChatClient {
   private token: string;
